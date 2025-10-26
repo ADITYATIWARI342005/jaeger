@@ -74,3 +74,110 @@ func TestExpvarExtension_StartError(t *testing.T) {
 	err := s.Start(context.Background(), storagetest.NewStorageHost())
 	require.ErrorContains(t, err, "invalid_auth")
 }
+
+// TestExpvarExtension_ShutdownWithNilServer tests shutdown when server is nil
+func TestExpvarExtension_ShutdownWithNilServer(t *testing.T) {
+	config := &Config{
+		ServerConfig: confighttp.ServerConfig{
+			Endpoint: "0.0.0.0:27777",
+		},
+	}
+	s := newExtension(config, component.TelemetrySettings{
+		Logger: zaptest.NewLogger(t),
+	})
+	// server is nil
+	err := s.Shutdown(context.Background())
+	require.NoError(t, err)
+}
+
+// TestExpvarExtension_ShutdownWithServer tests shutdown with active server
+func TestExpvarExtension_ShutdownWithServer(t *testing.T) {
+	config := &Config{
+		ServerConfig: confighttp.ServerConfig{
+			Endpoint: "0.0.0.0:27778", // Use different port to avoid conflicts
+		},
+	}
+	s := newExtension(config, component.TelemetrySettings{
+		Logger: zaptest.NewLogger(t),
+	})
+
+	// Start the server
+	err := s.Start(context.Background(), storagetest.NewStorageHost())
+	require.NoError(t, err)
+
+	// Shutdown should work without error
+	err = s.Shutdown(context.Background())
+	require.NoError(t, err)
+}
+
+// TestExpvarExtension_ShutdownWithTimeout tests shutdown with timeout context
+func TestExpvarExtension_ShutdownWithTimeout(t *testing.T) {
+	config := &Config{
+		ServerConfig: confighttp.ServerConfig{
+			Endpoint: "0.0.0.0:27779", // Use different port to avoid conflicts
+		},
+	}
+	s := newExtension(config, component.TelemetrySettings{
+		Logger: zaptest.NewLogger(t),
+	})
+
+	// Start the server
+	err := s.Start(context.Background(), storagetest.NewStorageHost())
+	require.NoError(t, err)
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	// Shutdown should work with timeout context
+	err = s.Shutdown(ctx)
+	require.NoError(t, err)
+}
+
+// TestExpvarExtension_StartWithInvalidEndpoint tests start with invalid endpoint
+func TestExpvarExtension_StartWithInvalidEndpoint(t *testing.T) {
+	config := &Config{
+		ServerConfig: confighttp.ServerConfig{
+			Endpoint: "invalid://endpoint",
+		},
+	}
+	s := newExtension(config, component.TelemetrySettings{
+		Logger: zaptest.NewLogger(t),
+	})
+	err := s.Start(context.Background(), storagetest.NewStorageHost())
+	require.Error(t, err)
+}
+
+// TestExpvarExtension_StartWithToServerError tests start when ToServer fails
+func TestExpvarExtension_StartWithToServerError(t *testing.T) {
+	config := &Config{
+		ServerConfig: confighttp.ServerConfig{
+			Endpoint: "0.0.0.0:27780",
+			Auth: configoptional.Some(confighttp.AuthConfig{
+				Config: configauth.Config{
+					AuthenticatorID: component.MustNewID("nonexistent_auth"),
+				},
+			}),
+		},
+	}
+	s := newExtension(config, component.TelemetrySettings{
+		Logger: zaptest.NewLogger(t),
+	})
+	err := s.Start(context.Background(), storagetest.NewStorageHost())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "nonexistent_auth")
+}
+
+// TestExpvarExtension_StartWithToListenerError tests start when ToListener fails
+func TestExpvarExtension_StartWithToListenerError(t *testing.T) {
+	config := &Config{
+		ServerConfig: confighttp.ServerConfig{
+			Endpoint: "invalid://listener",
+		},
+	}
+	s := newExtension(config, component.TelemetrySettings{
+		Logger: zaptest.NewLogger(t),
+	})
+	err := s.Start(context.Background(), storagetest.NewStorageHost())
+	require.Error(t, err)
+}

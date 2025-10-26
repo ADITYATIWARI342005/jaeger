@@ -67,8 +67,6 @@ func (c *expvarExtension) Shutdown(ctx context.Context) error {
 		return nil
 	}
 
-	err := c.server.Shutdown(ctx)
 	c.shutdownWG.Wait()
-
-	return err
+	return c.server.Shutdown(ctx)
 }
